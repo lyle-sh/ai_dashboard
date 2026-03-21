@@ -1,12 +1,12 @@
 'use client';
 import CalendarEvents from './components/CalendarEvents';
 import { useState, useEffect } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 
 interface Goal { id:number; name:string; current:number; target:number; unit:string; color:string; status:string }
 interface Countdown { id:number; label:string; days:number; color:string }
 interface Priority { id:number; title:string; meta:string; tag:string; color:string }
-interface CalEvent { id:number; time:string; title:string; detail:string; color:string; googleId?:string }
+interface CalEvent { id:number; time:string; title:string; detail:string; color:string }
 interface Habit { id:number; name:string; done:number[] }
 interface Chip { text:string; type:'urgent'|'focus'|'good'|'warning' }
 interface Briefing { headline:string; summary:string; chips:Chip[] }
@@ -77,7 +77,6 @@ function GoogleCalBtn() {
 }
 
 export default function Dashboard() {
-  const { data: session } = useSession();
   const [goals,      setGoals]      = useLS<Goal[]>     ('mos_goals',      D_GOALS);
   const [countdowns, setCountdowns] = useLS<Countdown[]>('mos_countdowns', D_COUNTDOWNS);
   const [priorities, setPriorities] = useLS<Priority[]> ('mos_priorities', D_PRIORITIES);
@@ -128,25 +127,7 @@ export default function Dashboard() {
   function saveGoal(){if(!gf.name.trim())return;const cur=Math.max(0,Number(gf.current)),tar=Math.max(1,Number(gf.target));const status=getStatus(cur,tar);if(editId)setGoals(p=>p.map(g=>g.id===editId?{...g,...gf,current:cur,target:tar,status}:g));else setGoals(p=>[...p,{id:Date.now(),name:gf.name,current:cur,target:tar,unit:gf.unit,color:gf.color,status}]);closeModal();}
   function saveCd(){if(!cf.label.trim())return;setCountdowns(p=>[...p,{id:Date.now(),label:cf.label,days:Math.max(0,Number(cf.days)),color:cf.color}]);closeModal();}
   function savePriority(){if(!pf.title.trim())return;if(editId)setPriorities(p=>p.map(x=>x.id===editId?{...x,...pf}:x));else setPriorities(p=>[...p,{id:Date.now(),...pf}]);closeModal();}
-  async function saveCalEvent(){
-    if(!ef.title.trim())return;
-    if(editId){
-      const existing=calEvents.find(x=>x.id===editId);
-      setCalEvents(p=>p.map(x=>x.id===editId?{...x,...ef}:x));
-      if(session?.accessToken&&existing?.googleId){
-        await fetch('/api/calendar',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.accessToken},body:JSON.stringify({...ef,googleId:existing.googleId})});
-      }
-    } else {
-      let googleId;
-      if(session?.accessToken){
-        const res=await fetch('/api/calendar',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.accessToken},body:JSON.stringify(ef)});
-        const data=await res.json();
-        googleId=data.googleId;
-      }
-      setCalEvents(p=>[...p,{id:Date.now(),...ef,googleId}]);
-    }
-    closeModal();
-  }
+  function saveCalEvent(){if(!ef.title.trim())return;if(editId)setCalEvents(p=>p.map(x=>x.id===editId?{...x,...ef}:x));else setCalEvents(p=>[...p,{id:Date.now(),...ef}]);closeModal();}
   function saveHabit(){if(!hName.trim())return;setHabits(p=>[...p,{id:Date.now(),name:hName,done:[0,0,0,0,0,0,0]}]);closeModal();}
   function toggleHabit(hid:number,day:number){setHabits(p=>p.map(h=>h.id===hid?{...h,done:h.done.map((d,i)=>i===day?d===1?0:1:d)}:h));}
   function incrementGoal(id:number){setGoals(p=>p.map(g=>{if(g.id!==id)return g;const next=Math.min(g.current+1,g.target);return{...g,current:next,status:getStatus(next,g.target)};}));}
@@ -382,13 +363,7 @@ export default function Dashboard() {
                     <div style={{fontSize:13,fontWeight:500,color:'var(--text)',marginBottom:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.title}</div>
                     <div style={{fontSize:11,color:'var(--text3)'}}>{e.detail}</div>
                   </div>
-                  <button className="xbtn" onClick={async ev=>{
-    ev.stopPropagation();
-    if(session?.accessToken&&e.googleId){
-      await fetch('/api/calendar',{method:'DELETE',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.accessToken},body:JSON.stringify({googleId:e.googleId})});
-    }
-    setCalEvents(x=>x.filter(i=>i.id!==e.id));
-  }}>✕</button>
+                  <button className="xbtn" onClick={ev=>{ev.stopPropagation();setCalEvents(x=>x.filter(i=>i.id!==e.id))}}>✕</button>
                 </div>
               ))}
             </div>
