@@ -13,11 +13,15 @@ export async function GET(req: NextRequest) {
   try {
     const auth = getAuth(req);
     if (!auth) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const { searchParams } = new URL(req.url);
+    const timeMin = searchParams.get('timeMin') || new Date().toISOString();
+    const timeMax = searchParams.get('timeMax') || undefined;
     const calendar = google.calendar({ version: 'v3', auth });
     const res = await calendar.events.list({
       calendarId: 'primary',
-      timeMin: new Date().toISOString(),
-      maxResults: 10,
+      timeMin,
+      ...(timeMax ? { timeMax } : {}),
+      maxResults: 20,
       singleEvents: true,
       orderBy: 'startTime',
     });

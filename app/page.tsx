@@ -82,6 +82,7 @@ export default function Dashboard() {
   const [countdowns, setCountdowns] = useLS<Countdown[]>('mos_countdowns', D_COUNTDOWNS);
   const [priorities, setPriorities] = useLS<Priority[]> ('mos_priorities', D_PRIORITIES);
   const [calEvents,  setCalEvents]  = useLS<CalEvent[]> ('mos_calevents',  D_CALEVENTS);
+  const [googleCalEvents, setGoogleCalEvents] = useState<CalEvent[]>([]);
   const [habits,     setHabits]     = useLS<Habit[]>    ('mos_habits',     D_HABITS);
 
   const [briefing,  setBriefing]  = useState<Briefing|null>(null);
@@ -152,10 +153,36 @@ export default function Dashboard() {
   function incrementGoal(id:number){setGoals(p=>p.map(g=>{if(g.id!==id)return g;const next=Math.min(g.current+1,g.target);return{...g,current:next,status:getStatus(next,g.target)};}));}
 
   const now=new Date();
+  // Fetch today's Google Calendar events
+  useEffect(()=>{
+    if(!session?.accessToken) return;
+    const startOfDay=new Date(); startOfDay.setHours(0,0,0,0);
+    const endOfDay=new Date(); endOfDay.setHours(23,59,59,999);
+    fetch('/api/calendar?timeMin='+startOfDay.toISOString()+'&timeMax='+endOfDay.toISOString(),{
+      headers:{'Authorization':'Bearer '+session.accessToken}
+    })
+    .then(r=>r.json())
+    .then(data=>{
+      const localGoogleIds=calEvents.filter(e=>e.googleId).map(e=>e.googleId);
+      const merged=(data.events||[])
+        .filter((e:any)=>!localGoogleIds.includes(e.id))
+        .map((e:any)=>({
+          id: e.id,
+          time: e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}) : 'All Day',
+          title: e.summary||'Untitled',
+          detail: e.description||'',
+          color: '#4285F4',
+          googleId: e.id
+        }));
+      setGoogleCalEvents(merged);
+    })
+    .catch(console.error);
+  },[session]);
+
   const dateStr=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const hour=now.getHours();
   const greeting=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
-  const sortedCal=[...calEvents].sort((a,b)=>a.time.localeCompare(b.time));
+  const sortedCal=[...calEvents,...googleCalEvents].sort((a,b)=>a.time.localeCompare(b.time));
 
   const CP=({value,onChange}:{value:string,onChange:(c:string)=>void})=>(
     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
